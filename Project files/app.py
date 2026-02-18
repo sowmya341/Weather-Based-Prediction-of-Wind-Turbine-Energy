@@ -1,55 +1,35 @@
-from flask import Flask, request, render_template
+import pickle
+import streamlit as st
 import pandas as pd
-from datetime import datetime
-import joblib
-import sys
-import os
 
-# Add the current directory to Python path to ensure classes are available
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Load the model
+with open('lilo_model.sav', 'rb') as f:
+    model = pickle.load(f)
 
-# Import the pipeline classes
-from pipe import FullPipeline1, LabelEncodeColumns, CustomOneHotEncoder, DropColumnsTransformer, OutlierThresholdTransformer, DateExtractor, DataFrameImputer, StandardScaleTransform
+# Define the title and description
+st.title('Wind Turbine Power Prediction Web Application')
+st.write("Harnessing Renewable Energy with **Machine Learning**")
 
-app = Flask(__name__)
+# Text input fields for user input
+wind_speed = st.text_input('Wind Speed (m/s)', placeholder="Enter wind speed")
+theoretical_power_curve = st.text_input('Theoretical Power Curve (KWh)', placeholder="Enter theoretical power curve")
+wind_direction = st.text_input('Wind Direction (°)', placeholder="Enter wind direction")
+month = st.number_input('Month', min_value=1, max_value=12, step=1, format='%d', help="Enter month number (1-12)")
 
-# Load the trained model
-model = joblib.load('one_hot_model_fixed.pkl')
+# Button to confirm and trigger prediction
+con = st.button('Confirm')
+if con:
+    # Create a DataFrame with user inputs
+    df = pd.DataFrame({'Wind Speed (m/s)': [wind_speed],
+                        'Theoretical Power Curve (KWh)': [theoretical_power_curve],
+                        'Wind Direction (°)': [wind_direction],
+                        'Month': [month]})
 
-# Load the preprocessing pipeline
-pipeline = joblib.load('one_hot_pipeline_fixed.pkl')
+    # Convert input data to float
+    df = df.astype(float)
 
-# Route for the home page
-@app.route('/')
-def index():
-    return render_template('index.html')
+    # Make prediction using the model
+    result = model.predict(df)
 
-# Route for the form submission and prediction
-@app.route('/result', methods=['POST'])
-def predict():
-    # Get data from the form
-    date_time = request.form['date_time']
-    wind_speed = float(request.form['wind_speed'])
-    theoretical_power = float(request.form['theoretical_power'])
-    wind_direction = float(request.form['wind_direction'])
-
-    # Convert date/time to the desired format
-    original_datetime = datetime.strptime(date_time, "%Y-%m-%dT%H:%M")
-    formatted_datetime_str = original_datetime.strftime("%d %m %Y %H:%M")
-
-    # Create a DataFrame with the form data
-    data = pd.DataFrame({'Date/Time': [formatted_datetime_str],
-                         'Wind Speed (m/s)': [wind_speed],
-                         'Theoretical_Power_Curve (KWh)': [theoretical_power],
-                         'Wind Direction (°)': [wind_direction]
-                         })
-    
-    # Preprocess data using the pipeline
-    transformed_data = pipeline.transform(data)
-    # Predict LV Active Power using the model
-    lv_active_power = model.predict(transformed_data)
-
-    return render_template('result.html', lv_active_power=lv_active_power)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    # Display the prediction result
+    st.write(f"Predicted Wind Turbine Power (Low Voltage Active Power): **{result[0]:.2f} kW**")
